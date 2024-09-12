@@ -152,7 +152,7 @@ class HTMLCommandToMarkdown {
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
-        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*[\.。])/, `<!--REF #_command_.${this._command.name}.Syntax-->$1<!-- END REF-->`)
+        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])/, `<!--REF #_command_.${this._command.name}.Syntax-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
 
         return markdown
