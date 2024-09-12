@@ -126,6 +126,8 @@ class HTMLCommandToMarkdown {
         if ($args.length == 0) {
             $args = this.$("body")
         }
+        this._convertLinks($args)
+        this._convertPictures($args)
         let firstDescription = $args.find(".rte4d").first();
         if (firstDescription.length > 0) {
             firstDescription.prepend("__DESC__")
@@ -162,11 +164,12 @@ class HTMLCommandToMarkdown {
         return "---\n" +
             "id: " + this._command.getCommandName() + "\n" +
             "title: " + this._command.name + "\n" +
+            "displayed_sidebar: docs\n"+
             "---\n"
     }
 
-    _convertPictures() {
-        let $args = this.$(".command_paragraph");
+    _convertPictures($args : cheerio.Cheerio) {
+        
         $args.find("img").each((i, el) => {
             let imagePath = this.$(el).attr("src");
             if (imagePath && this._command.language) {
@@ -185,8 +188,8 @@ class HTMLCommandToMarkdown {
         })
     }
 
-    _convertLinks() {
-        this.$("a").each((i, el) => {
+    _convertLinks($args : cheerio.Cheerio) {
+        $args.find("a").each((i, el) => {
             let link = this.$(el).attr("href");
             if (link && link.endsWith(".html")) {
                 try {
@@ -221,6 +224,7 @@ class HTMLCommandToMarkdown {
 
     _convertSeeAlso(): string {
         let $args = this.$("#SeeAlso_title");
+        this._convertLinks($args)
         let markdown = "";
         if ($args.length > 0) {
             markdown = "\n####" + NodeHtmlMarkdown.translate($args.html() as string) + "\n"
@@ -233,8 +237,6 @@ class HTMLCommandToMarkdown {
     run() {
         console.log(this._command)
         let list = []
-        this._convertLinks();
-        this._convertPictures();
         list.push(this._createHeader())
         list.push(this._convertParamsArray());
         list.push(this._convertDescription());
