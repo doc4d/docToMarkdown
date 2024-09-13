@@ -2,14 +2,29 @@
 import * as fs from 'fs';
 import * as cheerio from "cheerio";
 import { NodeHtmlMarkdown } from 'node-html-markdown'
-import { Glob, glob } from 'glob'
+import { Glob } from 'glob'
 import path from "path"
+import winston from 'winston';
+
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    //
+    // - Write all logs with importance level of `error` or less to `error.log`
+    // - Write all logs with importance level of `info` or less to `combined.log`
+    //
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' }),
+  ],
+});
 
 //const ROOT = "4Dv20R6"
 //const DEST = "4Dv20R6-MD"
 class Command {
-    public name: string;
     public language: string;
+    public name: string;
     constructor(link: string) {
         let fileName = path.parse(link).name;
         this.name = fileName
@@ -23,6 +38,10 @@ class Command {
     }
     getCommandName(): string {
         return this.name.toLowerCase().replace(/\s+/g, "-")
+    }
+
+    toString(): string {
+        return `{name:${this.name}, language:${this.language}}`
     }
 
 }
@@ -135,7 +154,7 @@ class HTMLCommandToMarkdown {
             firstDescription.prepend("__DESC__")
         }
         else {
-            console.error("No Description found")
+            logger.error({file:this._command, message:"No Description found"})
         }
 
         $args.find(".rte4d_prm").each((i, el) => {
@@ -184,7 +203,7 @@ class HTMLCommandToMarkdown {
                 try {
                     fs.copyFileSync(path.join(this._rootFolder, imagePath), path.join(dest, name))
                 } catch (e) {
-                    console.error("Image not found:", imagePath)
+                    logger.error({file:this._command, message:`Image not found: ${imagePath}`})
                 }
             }
         })
@@ -193,7 +212,9 @@ class HTMLCommandToMarkdown {
     _convertLinks($args: cheerio.Cheerio) {
         $args.find("a").each((i, el) => {
             let link = this.$(el).attr("href");
-            if (link && link.endsWith(".html")) {
+            const aClass = this.$(el).attr("class");
+            const is4DCode = aClass?.startsWith("code4d")
+            if (link && link.endsWith(".html") && !is4DCode) {
                 try {
                     let commandLocation;
                     if (link.startsWith("/")) {
@@ -203,7 +224,7 @@ class HTMLCommandToMarkdown {
                         commandLocation = path.join(this._rootFolder, link)
                     }
                     if (notValidLink.has(link)) {
-                        console.error("Cannot convert link:", link)
+                        logger.error({message:`Cannot convert link: ${link}`, file:this._command})
                         return;
                     }
                     let data = fs.readFileSync(commandLocation)
@@ -213,11 +234,11 @@ class HTMLCommandToMarkdown {
                     }
                     else {
                         notValidLink.add(link);
-                        console.error("Cannot convert link, not a command:", link)
+                        logger.error({message:`Cannot convert link: ${link}`, file:this._command})
                     }
                 } catch (e) {
                     notValidLink.add(link);
-                    console.error("Cannot convert link:", link)
+                    logger.error({message:`Cannot convert link: ${link}`, file:this._command})
                 }
 
             }
@@ -237,7 +258,7 @@ class HTMLCommandToMarkdown {
     }
 
     run(inDestFolder: string) {
-        console.log(this._command)
+        logger.info({file:this._command})
         let list = []
         list.push(this._createHeader())
         list.push(this._convertParamsArray());
@@ -298,7 +319,7 @@ if (!mdFolder) {
 
 getListOfCommands(htmlFolder, mdFolder)
 console.log(">>>>>>");
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\cs.301-6959020.fe.html", htmlFolder)
+//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\Is-editing-text.301-6958655.en.html", htmlFolder)
 //console.log(HTMLCommandToMarkdown.isLinkACommand(fs.readFileSync("4Dv20R6\\4D\\20-R6\\Abs.301-6958535.fr.html")))
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
 //fs.writeFileSync("test.md", c.run(mdFolder))
