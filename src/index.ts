@@ -5,8 +5,8 @@ import { NodeHtmlMarkdown } from 'node-html-markdown'
 import { Glob, glob } from 'glob'
 import path from "path"
 
-const ROOT = "4Dv20R6"
-const DEST = "4Dv20R6-MD"
+//const ROOT = "4Dv20R6"
+//const DEST = "4Dv20R6-MD"
 class Command {
     public name: string;
     public language: string;
@@ -36,10 +36,12 @@ class HTMLCommandToMarkdown {
     private $: cheerio.Root;
     public _command: Command;
     private _rootFolder: string;
+    public commandType : string = "Command";
     private constructor(inFile: string, inFileData: Buffer, inRootFolder: string) {
         this.$ = cheerio.load(inFileData);
         this._command = new Command(inFile)
         this._rootFolder = inRootFolder;
+        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandName().startsWith("wp") ? "WP" : "Command";
     }
 
     static FromFile(inFile: string, inRootFolder: string): HTMLCommandToMarkdown {
@@ -53,7 +55,7 @@ class HTMLCommandToMarkdown {
     static isLinkACommand(file: Buffer): boolean {
         let s = file.toString()
         return (s.includes("100-6957482") /*language*/
-        || s.includes("100-6993921")/*write pro*/) && s.includes("ak_700.png")
+            || s.includes("100-6993921")/*write pro*/) && s.includes("ak_700.png")
     }
 
     static isDeprecated(file: string): boolean {
@@ -79,7 +81,7 @@ class HTMLCommandToMarkdown {
     _convertParamsArray(): string {
         let $args = this.$(".tSynt_table");
         let syntax = $args.find(".tSynt_td_cc").text().trim();
-        syntax = syntax.replace(/^(.*)(?=\s\()/, "**$1**")
+        syntax = syntax.replace(/^(.*)(?=\s(\(|-))/, "**$1**")
         syntax = syntax.replace(/([a-zA-Z]+)(?= ;|\s\))/g, "*$1*")
 
         let tr = $args.find("tr");
@@ -121,13 +123,13 @@ class HTMLCommandToMarkdown {
         return syntax + "\n" + array + "\n"
     }
 
-    _convertDescription(): string {
+    _convertDescription(inDestFolder: string): string {
         let $args = this.$(".command_paragraph");
         if ($args.length == 0) {
             $args = this.$("body")
         }
         this._convertLinks($args)
-        this._convertPictures($args)
+        this._convertPictures(inDestFolder, $args)
         let firstDescription = $args.find(".rte4d").first();
         if (firstDescription.length > 0) {
             firstDescription.prepend("__DESC__")
@@ -152,7 +154,7 @@ class HTMLCommandToMarkdown {
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
-        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])/, `<!--REF #_command_.${this._command.name}.Syntax-->$1<!-- END REF-->`)
+        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.name}.Summary-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
 
         return markdown
@@ -164,19 +166,19 @@ class HTMLCommandToMarkdown {
         return "---\n" +
             "id: " + this._command.getCommandName() + "\n" +
             "title: " + this._command.name + "\n" +
-            "displayed_sidebar: docs\n"+
+            "displayed_sidebar: docs\n" +
             "---\n"
     }
 
-    _convertPictures($args : cheerio.Cheerio) {
-        
+    _convertPictures(inDestFolder: string, $args: cheerio.Cheerio) {
+
         $args.find("img").each((i, el) => {
             let imagePath = this.$(el).attr("src");
             if (imagePath && this._command.language) {
                 let parsedImagePath = path.parse(imagePath)
                 let name = parsedImagePath.name + parsedImagePath.ext
-                this.$(el).attr("src", "../assets/en/Commands/" + name)
-                const dest = path.join(DEST, this._command.language, "assets", "en", "Commands");
+                this.$(el).attr("src", "../assets/en/" + this.commandType + "/" + name)
+                const dest = path.join(inDestFolder, this._command.language, "assets", "en", this.commandType);
                 if (!fs.existsSync(dest))
                     fs.mkdirSync(dest, { recursive: true })
                 try {
@@ -188,7 +190,7 @@ class HTMLCommandToMarkdown {
         })
     }
 
-    _convertLinks($args : cheerio.Cheerio) {
+    _convertLinks($args: cheerio.Cheerio) {
         $args.find("a").each((i, el) => {
             let link = this.$(el).attr("href");
             if (link && link.endsWith(".html")) {
@@ -224,7 +226,7 @@ class HTMLCommandToMarkdown {
 
     _convertSeeAlso(): string {
         let $args = this.$("#SeeAlso_title");
-        this._convertLinks($args)
+        this._convertLinks($args.next())
         let markdown = "";
         if ($args.length > 0) {
             markdown = "\n####" + NodeHtmlMarkdown.translate($args.html() as string) + "\n"
@@ -234,12 +236,12 @@ class HTMLCommandToMarkdown {
         return markdown;
     }
 
-    run() {
+    run(inDestFolder: string) {
         console.log(this._command)
         let list = []
         list.push(this._createHeader())
         list.push(this._convertParamsArray());
-        list.push(this._convertDescription());
+        list.push(this._convertDescription(inDestFolder));
         list.push(this._convertSeeAlso());
 
         return list.join("\n");
@@ -248,10 +250,10 @@ class HTMLCommandToMarkdown {
 
 
 
-async function getListOfCommands() {
-    const commandRoot = ROOT + "/4D/20-R6/";
-    if (!fs.existsSync(DEST))
-        fs.mkdirSync(DEST);
+async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
+    const commandRoot = inRootFolder;
+    if (!fs.existsSync(inDestFolder))
+        fs.mkdirSync(inDestFolder);
 
 
     let g = new Glob([commandRoot + "*.902-*"], {});
@@ -273,21 +275,33 @@ async function getListOfCommands() {
                 const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
                 commandsDone.add(command.language + "/" + newName)
                 if (newName && command.language) {
-                    const dest = path.join(DEST, command.language, "Commands");
+                    const dest = path.join(inDestFolder, command.language, c.commandType);
                     if (!fs.existsSync(dest))
                         fs.mkdirSync(dest, { recursive: true })
-                    fs.writeFileSync(path.join(dest, newName), c.run())
+                    fs.writeFileSync(path.join(dest, newName), c.run(inDestFolder))
                 }
             }
         })
     }
 }
-getListOfCommands()
+
+var argv = require('minimist')(process.argv.slice(2));
+console.log(argv);
+let htmlFolder = argv.html;
+if (!htmlFolder) {
+    htmlFolder = "4Dv20R6/4D/20-R6/"
+}
+let mdFolder = argv.md;
+if (!mdFolder) {
+    mdFolder = "4Dv20R6-MD"
+}
+
+getListOfCommands(htmlFolder, mdFolder)
 console.log(">>>>>>");
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\Abs.301-6958535.fr.html", ROOT + "/4D/20-R6/")
+//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\cs.301-6959020.fe.html", htmlFolder)
 //console.log(HTMLCommandToMarkdown.isLinkACommand(fs.readFileSync("4Dv20R6\\4D\\20-R6\\Abs.301-6958535.fr.html")))
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
-//fs.writeFileSync("test.md", c.run())
+//fs.writeFileSync("test.md", c.run(mdFolder))
 console.log("<<<<<<");
 
 
