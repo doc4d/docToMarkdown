@@ -9,12 +9,13 @@ import winston from 'winston';
 
 const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.json(),
+  format: winston.format.combine(winston.format.json()),
   transports: [
     //
     // - Write all logs with importance level of `error` or less to `error.log`
     // - Write all logs with importance level of `info` or less to `combined.log`
     //
+    new winston.transports.Console({format:winston.format.colorize({ all: true })}),
     new winston.transports.File({ filename: 'error.log', level: 'error' }),
     new winston.transports.File({ filename: 'combined.log' }),
   ],
@@ -280,7 +281,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     let g = new Glob([commandRoot + "*.902-*"], {});
     for (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
-        console.log(value)
+        //console.log(value)
         $("#Title_list").find("a").each((i, el) => {
 
             if ($(el).text().length == 1)
