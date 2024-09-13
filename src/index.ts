@@ -102,7 +102,7 @@ class HTMLCommandToMarkdown {
         let $args = this.$(".tSynt_table");
         let syntax = $args.find(".tSynt_td_cc").text().trim();
         syntax = syntax.replace(/^(.*)(?=\s(\(|-))/, "**$1**")
-        syntax = syntax.replace(/([a-zA-Z]+)(?= ;|\s\))/g, "*$1*")
+        syntax = syntax.replace(/([a-zA-Z]+)(?=\s*;|\s*\)|\s*{|\s*})/g, "*$1*")
 
         let tr = $args.find("tr");
 
