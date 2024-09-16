@@ -8,24 +8,25 @@ import winston from 'winston';
 
 
 const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(winston.format.json()),
-  transports: [
-    //
-    // - Write all logs with importance level of `error` or less to `error.log`
-    // - Write all logs with importance level of `info` or less to `combined.log`
-    //
-    new winston.transports.Console({format:winston.format.colorize({ all: true })}),
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-  ],
+    level: 'info',
+    format: winston.format.combine(winston.format.json()),
+    transports: [
+        //
+        // - Write all logs with importance level of `error` or less to `error.log`
+        // - Write all logs with importance level of `info` or less to `combined.log`
+        //
+        new winston.transports.Console({ format: winston.format.colorize({ all: true }) }),
+        new winston.transports.File({ filename: 'error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'combined.log' }),
+    ],
 });
 
 //const ROOT = "4Dv20R6"
 //const DEST = "4Dv20R6-MD"
 class Command {
     public language: string;
-    public name: string;
+    private name: string;
+    
     constructor(link: string) {
         let fileName = path.parse(link).name;
         this.name = fileName
@@ -37,8 +38,16 @@ class Command {
             this.language = splits[2];
         }
     }
-    getCommandName(): string {
+    getCommandID(): string {
         return this.name.toLowerCase().replace(/\s+/g, "-")
+    }
+
+    getCommandName(): string {
+        if(this.name.startsWith("C "))
+        {
+            return this.name.replace(/\s+/g, "_")
+        }
+        return this.name
     }
 
     toString(): string {
@@ -56,12 +65,12 @@ class HTMLCommandToMarkdown {
     private $: cheerio.Root;
     public _command: Command;
     private _rootFolder: string;
-    public commandType : string = "Command";
+    public commandType: string = "Command";
     private constructor(inFile: string, inFileData: Buffer, inRootFolder: string) {
         this.$ = cheerio.load(inFileData);
         this._command = new Command(inFile)
         this._rootFolder = inRootFolder;
-        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandName().startsWith("wp") ? "WP" : "Command";
+        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp") ? "WP" : "Commands";
     }
 
     static FromFile(inFile: string, inRootFolder: string): HTMLCommandToMarkdown {
@@ -101,8 +110,8 @@ class HTMLCommandToMarkdown {
     _convertParamsArray(): string {
         let $args = this.$(".tSynt_table");
         let syntax = $args.find(".tSynt_td_cc").text().trim();
-        syntax = syntax.replace(/^(.*)(?=\s(\(|-))/, "**$1**")
-        syntax = syntax.replace(/([a-zA-Z]+)(?=\s*;|\s*\)|\s*{|\s*})/g, "*$1*")
+        syntax = syntax.replace(/^([\p{L}\s\d_]+)(?=\b\s*\(|\b\s*-|$|\b\s*\{)/u, "**$1**")
+        syntax = syntax.replace(/(?<=;\s*\b|\(\s*\b|\)\s*\b|\{\s*\b|\}\s*\b)([\p{L}\d]+)(?=\s*;|\s*\)|\s*\{|\s*\})/gu, "*$1*")
 
         let tr = $args.find("tr");
 
@@ -138,8 +147,8 @@ class HTMLCommandToMarkdown {
         if (formatedArgs.length == 0)
             return ""
         formatedArgs[0].splice(2, 0, "");
-        syntax = `<!--REF #_command_.${this._command.name}.Syntax-->` + syntax + "<!-- END REF-->"
-        const array = `<!--REF #_command_.${this._command.name}.Params-->\n` + this._jsonToMarkdownTable(formatedArgs) + "\n<!-- END REF-->"
+        syntax = `<!--REF #_command_.${this._command.getCommandName()}.Syntax-->` + syntax + "<!-- END REF-->"
+        const array = `<!--REF #_command_.${this._command.getCommandName()}.Params-->\n` + this._jsonToMarkdownTable(formatedArgs) + "\n<!-- END REF-->"
         return syntax + "\n" + array + "\n"
     }
 
@@ -155,7 +164,7 @@ class HTMLCommandToMarkdown {
             firstDescription.prepend("__DESC__")
         }
         else {
-            logger.error({file:this._command, message:"No Description found"})
+            logger.error({ file: this._command, message: "No Description found" })
         }
 
         $args.find(".rte4d_prm").each((i, el) => {
@@ -174,7 +183,7 @@ class HTMLCommandToMarkdown {
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
-        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.name}.Summary-->$1<!-- END REF-->`)
+        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.getCommandName()}.Summary-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
 
         return markdown
@@ -184,8 +193,8 @@ class HTMLCommandToMarkdown {
 
     _createHeader() {
         return "---\n" +
-            "id: " + this._command.getCommandName() + "\n" +
-            "title: " + this._command.name + "\n" +
+            "id: " + this._command.getCommandID() + "\n" +
+            "title: " + this._command.getCommandName() + "\n" +
             "displayed_sidebar: docs\n" +
             "---\n"
     }
@@ -204,7 +213,7 @@ class HTMLCommandToMarkdown {
                 try {
                     fs.copyFileSync(path.join(this._rootFolder, imagePath), path.join(dest, name))
                 } catch (e) {
-                    logger.error({file:this._command, message:`Image not found: ${imagePath}`})
+                    logger.error({ file: this._command, message: `Image not found: ${imagePath}` })
                 }
             }
         })
@@ -225,21 +234,21 @@ class HTMLCommandToMarkdown {
                         commandLocation = path.join(this._rootFolder, link)
                     }
                     if (notValidLink.has(link)) {
-                        logger.error({message:`Cannot convert link: ${link}`, file:this._command})
+                        logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                         return;
                     }
                     let data = fs.readFileSync(commandLocation)
                     if (HTMLCommandToMarkdown.isLinkACommand(data) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
-                        const dest = new Command(link).getCommandName() + ".md";
+                        const dest = new Command(link).getCommandID() + ".md";
                         this.$(el).attr("href", dest);
                     }
                     else {
                         notValidLink.add(link);
-                        logger.error({message:`Cannot convert link: ${link}`, file:this._command})
+                        logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                     }
                 } catch (e) {
                     notValidLink.add(link);
-                    logger.error({message:`Cannot convert link: ${link}`, file:this._command})
+                    logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                 }
 
             }
@@ -259,7 +268,7 @@ class HTMLCommandToMarkdown {
     }
 
     run(inDestFolder: string) {
-        logger.info({file:this._command})
+        logger.info({ file: this._command })
         let list = []
         list.push(this._createHeader())
         list.push(this._convertParamsArray());
@@ -288,7 +297,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
                 return;
             const commandPath = commandRoot + $(el).attr("href")
             const command = new Command(commandPath)
-            const newName = command.getCommandName() + ".md";
+            const newName = command.getCommandID() + ".md";
             console.log(newName)
             if (commandsDone.has(command.language + "/" + newName))
                 return;
