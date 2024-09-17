@@ -21,7 +21,7 @@ const logger = winston.createLogger({
         new winston.transports.File({ filename: 'combined.log' }),
     ],
 });
-logger.silent = true;
+//logger.silent = true;
 let notValidLink: Set<string> = new Set<string>()
 
 //const ROOT = "4Dv20R6"
@@ -100,10 +100,13 @@ class HTMLCommandToMarkdown {
         return new HTMLCommandToMarkdown(inFile, inFileData, inRootFolder)
     }
 
-    static isLinkACommand(file: Buffer): boolean {
-        let s = file.toString()
-        return (s.includes("100-6957482") /*language*/
-            || s.includes("100-6993921")/*write pro*/) && s.includes("ak_700.png")
+    static isLinkACommand(file: Buffer, inFile: string): boolean {
+        if (inFile.includes("301-")) {
+            let s = file.toString()
+            return (s.includes("100-6957482") /*language*/
+                || s.includes("100-6993921")/*write pro*/) && s.includes("ak_700.png") && !s.includes("ak_610.png")
+        }
+        return false;
     }
 
     static isDeprecated(file: string): boolean {
@@ -346,17 +349,19 @@ class HTMLCommandToMarkdown {
                         logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                         return;
                     }
-                    let data = fs.readFileSync(commandLocation)
-                    if (HTMLCommandToMarkdown.isLinkACommand(data) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
+                    const data = fs.readFileSync(commandLocation)
+                    if (HTMLCommandToMarkdown.isLinkACommand(data, commandLocation) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
                         const dest = new Command(link).getCommandID() + ".md";
                         this.$(el).attr("href", dest);
                     }
                     else {
                         notValidLink.add(link);
+                        this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
                         logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                     }
                 } catch (e) {
                     notValidLink.add(link);
+                    this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
                     logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                 }
 
@@ -397,7 +402,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
 
 
     let commandsDone: Set<string> = new Set<string>()
-    let listCommandsByTheme : Map<string, string[]> = new Map<string, string[]>()
+    let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
     for (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
@@ -411,16 +416,14 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             if (command.language == 'fr' || commandsDone.has(command.language + "/" + newName))
                 return;
             let data = fs.readFileSync(commandPath)
-            if (data && HTMLCommandToMarkdown.isLinkACommand(data) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
+            if (data && HTMLCommandToMarkdown.isLinkACommand(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
                 const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
-                if(command.language == "en")
-                {
+                if (command.language == "en") {
                     const theme = command.language + "/" + c.getTheme()
                     let list = listCommandsByTheme.get(theme)
-                    if(!list)
-                    {
+                    if (!list) {
                         list = []
-                    }                
+                    }
                     list.push(c.commandType + "/" + command.getCommandID())
                     listCommandsByTheme.set(theme, list)
                 }
@@ -439,15 +442,14 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
 }
 
 
-function convertThemesToJSON(listCommandsByTheme : Map<string, string[]>)
-{ 
-    let themes :any = []
+function convertThemesToJSON(listCommandsByTheme: Map<string, string[]>) {
+    let themes: any = []
     let sorted = new Map([...listCommandsByTheme.entries()].sort())
     sorted.forEach((value, key) => {
         let theme = key.split("/")
         let themeName = theme[1]
         value.sort()
-        themes.push({type:"category", label: themeName, items: value})
+        themes.push({ type: "category", label: themeName, items: value })
     })
     fs.writeFileSync("themes.json", JSON.stringify(themes, null, 2))
 }
@@ -463,14 +465,14 @@ if (!mdFolder) {
 }
 
 
-fs.rmSync(mdFolder, { recursive: true, force: true })
+//fs.rmSync(mdFolder, { recursive: true, force: true })
 fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
 getListOfCommands(htmlFolder, mdFolder)
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\DOM-Create-XML-element-arrays.301-6957760.en.html", htmlFolder)
+//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\ARRAY-TO-LIST.301-6958332.en.html", htmlFolder)
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
 //fs.writeFileSync("test.md", c.run(mdFolder))
 
-
+console.log("Done")
 
