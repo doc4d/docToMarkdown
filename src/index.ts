@@ -442,9 +442,11 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
 function convertThemesToJSON(listCommandsByTheme : Map<string, string[]>)
 { 
     let themes :any = []
-    listCommandsByTheme.forEach((value, key) => {
+    let sorted = new Map([...listCommandsByTheme.entries()].sort())
+    sorted.forEach((value, key) => {
         let theme = key.split("/")
         let themeName = theme[1]
+        value.sort()
         themes.push({type:"category", label: themeName, items: value})
     })
     fs.writeFileSync("themes.json", JSON.stringify(themes, null, 2))
