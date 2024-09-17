@@ -21,6 +21,8 @@ const logger = winston.createLogger({
         new winston.transports.File({ filename: 'combined.log' }),
     ],
 });
+logger.silent = true;
+let notValidLink: Set<string> = new Set<string>()
 
 //const ROOT = "4Dv20R6"
 //const DEST = "4Dv20R6-MD"
@@ -76,9 +78,6 @@ class Command {
 
 }
 
-let notValidLink: Set<string> = new Set<string>()
-let commandsDone: Set<string> = new Set<string>()
-
 
 
 class HTMLCommandToMarkdown {
@@ -110,6 +109,11 @@ class HTMLCommandToMarkdown {
     static isDeprecated(file: string): boolean {
         return path.parse(file).name.startsWith("o-")
     }
+
+    getTheme(): string {
+        return this.$(".ppB").last().text().trim()
+    }
+
     _jsonToMarkdownTable(data: any[][]): string {
         let markdownTable = '';
 
@@ -392,6 +396,8 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
         fs.mkdirSync(inDestFolder);
 
 
+    let commandsDone: Set<string> = new Set<string>()
+    let listCommandsByTheme : Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
     for (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
@@ -407,6 +413,18 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             let data = fs.readFileSync(commandPath)
             if (data && HTMLCommandToMarkdown.isLinkACommand(data) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
                 const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
+                if(command.language == "en")
+                {
+                    const theme = command.language + "/" + c.getTheme()
+                    let list = listCommandsByTheme.get(theme)
+                    if(!list)
+                    {
+                        list = []
+                    }                
+                    list.push(c.commandType + "/" + command.getCommandID())
+                    listCommandsByTheme.set(theme, list)
+                }
+
                 commandsDone.add(command.language + "/" + newName)
                 if (newName && command.language) {
                     const dest = path.join(inDestFolder, command.language, c.commandType);
@@ -417,6 +435,19 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             }
         })
     }
+    convertThemesToJSON(listCommandsByTheme)
+}
+
+
+function convertThemesToJSON(listCommandsByTheme : Map<string, string[]>)
+{ 
+    let themes :any = []
+    listCommandsByTheme.forEach((value, key) => {
+        let theme = key.split("/")
+        let themeName = theme[1]
+        themes.push({type:"category", label: themeName, items: value})
+    })
+    fs.writeFileSync("themes.json", JSON.stringify(themes, null, 2))
 }
 
 var argv = require('minimist')(process.argv.slice(2));
@@ -435,7 +466,6 @@ fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
 getListOfCommands(htmlFolder, mdFolder)
-
 //let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\DOM-Create-XML-element-arrays.301-6957760.en.html", htmlFolder)
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
 //fs.writeFileSync("test.md", c.run(mdFolder))
