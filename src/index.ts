@@ -7,6 +7,7 @@ import path from "path"
 import winston from 'winston';
 
 
+
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(winston.format.json()),
@@ -26,7 +27,7 @@ const logger = winston.createLogger({
 class Command {
     public language: string;
     private name: string;
-    
+
     constructor(link: string) {
         let fileName = path.parse(link).name;
         this.name = fileName
@@ -42,9 +43,11 @@ class Command {
         return this.name.toLowerCase().replace(/\s+/g, "-")
     }
 
+    isC_Command(): boolean {
+        return this.name.startsWith("C ")
+    }
     getCommandName(): string {
-        if(this.name.startsWith("C "))
-        {
+        if (this.isC_Command()) {
             return this.name.replace(/\s+/g, "_")
         }
         return this.name
@@ -173,22 +176,101 @@ class HTMLCommandToMarkdown {
         $args.find("code").each((i, e) => {
             let currentLanguage = this.$(e).parent().attr("class");
             currentLanguage = currentLanguage?.split("code")[1]
-            this.$(e).replaceWith(`<pre><code class="language-${currentLanguage}">` + this.$(e).html() as string + "</pre></code>")
+            let content = this.$(e).text();
+            this.$(e).replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
         })
         $args.find("tr").find("br").each((i, el) => {
             this.$(el).replaceWith("__SPACE__")
         })
-
 
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.getCommandName()}.Summary-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
+        markdown = this._convertOld4DCode(markdown)
 
         return markdown
     }
 
+    _convertC_Command(code4D : string) : string
+    {
+        if(this._command.isC_Command())
+            return code4D;
+        let regexConvertOldCommands = /(C_\w*)\((.*)\)/g;
+        let newContent
+        while ((newContent = regexConvertOldCommands.exec(code4D)) !== null) {
+            let newType = ""
+            if (newContent[1] == "C_OBJECT") {
+                newType = "Object"
+            }
+            else if (newContent[1] == "C_LONGINT") {
+                newType = "Integer"
+            }
+            else if (newContent[1] == "C_REAL") {
+                newType = "Real"
+            }
+            else if (newContent[1] == "C_VARIANT") {
+                newType = "Variant"
+            }
+            else if (newContent[1] == "C_TEXT") {
+                newType = "Text"
+            }
+            else if (newContent[1] == "C_BOOLEAN") {
+                newType = "Boolean"
+            }
+            else if (newContent[1] == "C_POINTER") {
+                newType = "Pointer"
+            }
+            else if (newContent[1] == "C_PICTURE") {
+                newType = "Picture"
+            }
+            else if (newContent[1] == "C_BLOB") {
+                newType = "Blob"
+            }
+            else if (newContent[1] == "C_DATE") {
+                newType = "Date"
+            }
+            else if (newContent[1] == "C_TIME") {
+                newType = "Time"
+            }
+            else if (newContent[1] == "C_COLLECTION") {
+                newType = "Collection"
+            }
+            else if (newContent[1] == "C_STRING") {
+                logger.error({ message: `Cannot convert old 4D Code: ${newContent[1]}`, file: this._command })
+            }
+            else {
+                logger.error({ message: `Cannot convert old 4D Code: ${newContent[1]}`, file: this._command })
+            }
+            if(newType != "")
+                code4D = code4D.replace(newContent[0], `var ${newContent[2]} : ${newType}`)
+        }
+        return code4D;
+    }
+
+    _convertOldComments(code4D : string) : string {
+        let regexConvertOldComments = /`(.+)/gu
+        let newContent
+        while ((newContent = regexConvertOldComments.exec(code4D)) !== null) {
+            code4D = code4D.replace(newContent[0], `//${newContent[1]}`)
+        }
+        return code4D;
+    }
+
+    _convertOld4DCode(markdown : string) : string {
+        let regexCode4D = /(?<=```4d\s)(\s+[\s\S]*?)(?=\s```)/gmu
+        let result : RegExpExecArray | null;
+        while ((result = regexCode4D.exec(markdown)) !== null) {
+            const before = markdown.substring(0, result.index)
+            const after = markdown.substring(result.index + result[0].length) 
+            let code4D = result[0]
+            code4D = this._convertC_Command(code4D)
+            code4D = this._convertOldComments(code4D)
+            markdown = before + code4D + after
+        }
+        return markdown;
+    }
 
 
     _createHeader() {
@@ -299,7 +381,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             const command = new Command(commandPath)
             const newName = command.getCommandID() + ".md";
             console.log(newName)
-            if (commandsDone.has(command.language + "/" + newName))
+            if (command.language == 'fr' || commandsDone.has(command.language + "/" + newName))
                 return;
             let data = fs.readFileSync(commandPath)
             if (data && HTMLCommandToMarkdown.isLinkACommand(data) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
@@ -327,13 +409,14 @@ if (!mdFolder) {
     mdFolder = "4Dv20R6-MD"
 }
 
+fs.rmSync(mdFolder, { recursive: true, force: true })
+fs.rmSync("combined.log", { force: true })
+fs.rmSync("error.log", { force: true })
+
 getListOfCommands(htmlFolder, mdFolder)
-console.log(">>>>>>");
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\Is-editing-text.301-6958655.en.html", htmlFolder)
-//console.log(HTMLCommandToMarkdown.isLinkACommand(fs.readFileSync("4Dv20R6\\4D\\20-R6\\Abs.301-6958535.fr.html")))
+//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\WA-SET-URL-FILTERS.301-6959051.fe.html", htmlFolder)
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
 //fs.writeFileSync("test.md", c.run(mdFolder))
-console.log("<<<<<<");
 
 
 
