@@ -130,6 +130,9 @@ class HTMLCommandToMarkdown {
             const row = data[i];
             markdownTable += '| ' + row.join(' | ') + ' |\n';
         }
+        markdownTable = markdownTable.replace(/->/g, "&rarr;")
+        markdownTable = markdownTable.replace(/<->/g, "&harr;")
+        markdownTable = markdownTable.replace(/<-/g, "&larr;")
 
         return markdownTable;
     }
