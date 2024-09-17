@@ -40,7 +40,16 @@ class Command {
         }
     }
     getCommandID(): string {
-        return this.name.toLowerCase().replace(/\s+/g, "-")
+        const id = this.name.toLowerCase().replace(/\s+/g, "-")
+        return id;
+    }
+
+    getCommandID_Header(): string {
+        const id = this.getCommandID()
+
+        if ((id === "false" || id === "true" || id === "null"))
+            return `"${id}"`;
+        return id;
     }
 
     isC_Command(): boolean {
@@ -51,6 +60,14 @@ class Command {
             return this.name.replace(/\s+/g, "_")
         }
         return this.name
+    }
+
+    getCommandName_Header(): string {
+        const name = this.getCommandName()
+
+        if ((name === "False" || name === "True" || name === "Null"))
+            return `"${name}"`;
+        return name;
     }
 
     toString(): string {
@@ -73,7 +90,7 @@ class HTMLCommandToMarkdown {
         this.$ = cheerio.load(inFileData);
         this._command = new Command(inFile)
         this._rootFolder = inRootFolder;
-        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp") ? "WP" : "Commands";
+        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp") ? "WP" : "commands";
     }
 
     static FromFile(inFile: string, inRootFolder: string): HTMLCommandToMarkdown {
@@ -173,8 +190,16 @@ class HTMLCommandToMarkdown {
         $args.find(".rte4d_prm").each((i, el) => {
             this.$(el).replaceWith("<i>" + this.$(el).html() + "</i>")
         })
+        $args.find("pre").each((i, e) => {
+            let currentLanguage = this.$(e).parent().attr("class");
+            currentLanguage = currentLanguage?.split("code")[1]
+            let content = this.$(e).html();
+            this.$(e).parent().replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
+        })
         $args.find("code").each((i, e) => {
             let currentLanguage = this.$(e).parent().attr("class");
+            if (!currentLanguage || currentLanguage?.startsWith("language-"))
+                return;
             currentLanguage = currentLanguage?.split("code")[1]
             let content = this.$(e).text();
             this.$(e).replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
@@ -182,7 +207,6 @@ class HTMLCommandToMarkdown {
         $args.find("tr").find("br").each((i, el) => {
             this.$(el).replaceWith("__SPACE__")
         })
-
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
@@ -193,9 +217,8 @@ class HTMLCommandToMarkdown {
         return markdown
     }
 
-    _convertC_Command(code4D : string) : string
-    {
-        if(this._command.isC_Command())
+    _convertC_Command(code4D: string): string {
+        if (this._command.isC_Command())
             return code4D;
         let regexConvertOldCommands = /(C_\w*)\((.*)\)/g;
         let newContent
@@ -243,13 +266,13 @@ class HTMLCommandToMarkdown {
             else {
                 logger.error({ message: `Cannot convert old 4D Code: ${newContent[1]}`, file: this._command })
             }
-            if(newType != "")
+            if (newType != "")
                 code4D = code4D.replace(newContent[0], `var ${newContent[2]} : ${newType}`)
         }
         return code4D;
     }
 
-    _convertOldComments(code4D : string) : string {
+    _convertOldComments(code4D: string): string {
         let regexConvertOldComments = /`(.+)/gu
         let newContent
         while ((newContent = regexConvertOldComments.exec(code4D)) !== null) {
@@ -258,12 +281,12 @@ class HTMLCommandToMarkdown {
         return code4D;
     }
 
-    _convertOld4DCode(markdown : string) : string {
+    _convertOld4DCode(markdown: string): string {
         let regexCode4D = /(?<=```4d\s)(\s+[\s\S]*?)(?=\s```)/gmu
-        let result : RegExpExecArray | null;
+        let result: RegExpExecArray | null;
         while ((result = regexCode4D.exec(markdown)) !== null) {
             const before = markdown.substring(0, result.index)
-            const after = markdown.substring(result.index + result[0].length) 
+            const after = markdown.substring(result.index + result[0].length)
             let code4D = result[0]
             code4D = this._convertC_Command(code4D)
             code4D = this._convertOldComments(code4D)
@@ -275,8 +298,8 @@ class HTMLCommandToMarkdown {
 
     _createHeader() {
         return "---\n" +
-            "id: " + this._command.getCommandID() + "\n" +
-            "title: " + this._command.getCommandName() + "\n" +
+            "id: " + this._command.getCommandID_Header() + "\n" +
+            "title: " + this._command.getCommandName_Header() + "\n" +
             "displayed_sidebar: docs\n" +
             "---\n"
     }
@@ -342,7 +365,7 @@ class HTMLCommandToMarkdown {
         this._convertLinks($args.next())
         let markdown = "";
         if ($args.length > 0) {
-            markdown = "\n####" + NodeHtmlMarkdown.translate($args.html() as string) + "\n"
+            markdown = "\n####" + NodeHtmlMarkdown.translate($args.html() as string) + "\n\n"
             markdown += NodeHtmlMarkdown.translate($args.next().html() as string)
         }
 
@@ -372,7 +395,6 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     let g = new Glob([commandRoot + "*.902-*"], {});
     for (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
-        //console.log(value)
         $("#Title_list").find("a").each((i, el) => {
 
             if ($(el).text().length == 1)
@@ -380,7 +402,6 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             const commandPath = commandRoot + $(el).attr("href")
             const command = new Command(commandPath)
             const newName = command.getCommandID() + ".md";
-            console.log(newName)
             if (command.language == 'fr' || commandsDone.has(command.language + "/" + newName))
                 return;
             let data = fs.readFileSync(commandPath)
@@ -399,7 +420,6 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
 }
 
 var argv = require('minimist')(process.argv.slice(2));
-console.log(argv);
 let htmlFolder = argv.html;
 if (!htmlFolder) {
     htmlFolder = "4Dv20R6/4D/20-R6/"
@@ -409,12 +429,14 @@ if (!mdFolder) {
     mdFolder = "4Dv20R6-MD"
 }
 
+
 fs.rmSync(mdFolder, { recursive: true, force: true })
 fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
 getListOfCommands(htmlFolder, mdFolder)
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\WA-SET-URL-FILTERS.301-6959051.fe.html", htmlFolder)
+
+//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\DOM-Create-XML-element-arrays.301-6957760.en.html", htmlFolder)
 //let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
 //fs.writeFileSync("test.md", c.run(mdFolder))
 
