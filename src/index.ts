@@ -344,7 +344,7 @@ class HTMLCommandToMarkdown {
 
     async _convertLinks($args: cheerio.Cheerio) {
         const $links = $args.find("a")
-        for await (const el of $links) {
+        for (const el of $links) {
             let link = this.$(el).attr("href");
             const aClass = this.$(el).attr("class");
             const is4DCode = aClass?.startsWith("code4d")
@@ -422,7 +422,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     for await (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
         const $l = $("#Title_list").find("a")
-        for await (const el of $l) {
+        for (const el of $l) {
             if ($(el).text().length == 1)
                 continue;
 
@@ -431,8 +431,6 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             const newName = command.getCommandID() + ".md";
             //console.log(newName)
             if (command.language === 'fr' || commandsDone.has(command.language + "/" + newName))
-                continue;
-            if (command.language !== 'en')
                 continue;
             let data = fs.readFileSync(commandPath)
             if (data && HTMLCommandToMarkdown.isLinkACommand(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
