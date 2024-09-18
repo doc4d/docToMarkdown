@@ -201,17 +201,17 @@ class HTMLCommandToMarkdown {
             logger.error({ file: this._command, message: "No Description found" })
         }
 
-        for await ( const el of $args.find(".rte4d_prm")) {
+        for await (const el of $args.find(".rte4d_prm")) {
             this.$(el).replaceWith("<i>" + this.$(el).html() + "</i>")
         }
-        
-        for await ( const el of $args.find("pre")) {
+
+        for await (const el of $args.find("pre")) {
             let currentLanguage = this.$(el).parent().attr("class");
             currentLanguage = currentLanguage?.split("code")[1]
             let content = this.$(el).html();
             this.$(el).parent().replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
         }
-        for await( const el of $args.find("code")) {
+        for await (const el of $args.find("code")) {
             let currentLanguage = this.$(el).parent().attr("class");
             if (!currentLanguage || currentLanguage?.startsWith("language-"))
                 continue;
@@ -418,7 +418,6 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     let commandsDone: Set<string> = new Set<string>()
     let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
-    let listPromises = []
     for await (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
         const $l = $("#Title_list").find("a")
@@ -451,16 +450,12 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
                     if (!fs.existsSync(dest)) {
                         fs.mkdirSync(dest, { recursive: true })
                     }
-                    listPromises.push((async () => {
-                        const d = await c.run(inDestFolder)
-                        fs.writeFileSync(path.join(dest, newName), d)
-                    })())
+                    const d = await c.run(inDestFolder)
+                    fs.writeFileSync(path.join(dest, newName), d)
                 }
             }
         }
     }
-
-    await Promise.all(listPromises)
 
     convertThemesToJSON(listCommandsByTheme)
 }
@@ -480,6 +475,7 @@ function convertThemesToJSON(listCommandsByTheme: Map<string, string[]>) {
 
 async function test(path: string) {
     let c = HTMLCommandToMarkdown.FromFile(path, htmlFolder)
+    console.log("Is a command", HTMLCommandToMarkdown.isLinkACommand(fs.readFileSync(path), path))
     fs.writeFileSync("test.md", await c.run(mdFolder))
 }
 
@@ -501,7 +497,7 @@ fs.rmSync("error.log", { force: true })
 getListOfCommands(htmlFolder, mdFolder).then(() => {
     console.log("Done")
 })
-//test("4Dv20R6\\4D\\20-R6\\Active-transaction.301-6958363.en.html")
+//test("4Dv20R6\\4D\\20-R6\\SVG-Export-to-picture.301-7184764.en.html")
 
 
 
