@@ -84,12 +84,16 @@ class HTMLCommandToMarkdown {
     private $: cheerio.Root;
     public _command: Command;
     private _rootFolder: string;
-    public commandType: string = "Command";
+    public commandType: string = "commands-legacy";
+    public assetFolder: string = "commands";
+
     private constructor(inFile: string, inFileData: Buffer, inRootFolder: string) {
         this.$ = cheerio.load(inFileData);
         this._command = new Command(inFile)
         this._rootFolder = inRootFolder;
-        this.commandType = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp") ? "WP" : "commands";
+        const isWP = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp")
+        this.commandType = isWP ? "WP" : "commands-legacy";
+        this.assetFolder = isWP ? "WP" : "commands";
     }
 
     static FromFile(inFile: string, inRootFolder: string): HTMLCommandToMarkdown {
@@ -137,7 +141,7 @@ class HTMLCommandToMarkdown {
         return markdownTable;
     }
 
-    _convertParamsArray(): string {
+    async _convertParamsArray(): Promise<string> {
         let $args = this.$(".tSynt_table");
         let syntax = $args.find(".tSynt_td_cc").text().trim();
         syntax = syntax.replace(/^([\p{L}\s\d_]+)(?=\b\s*\(|\b\s*-|$|\b\s*\{)/u, "**$1**")
@@ -149,7 +153,7 @@ class HTMLCommandToMarkdown {
         for (let i = 3; i < tr.length; i++) {
             let valid = false;
             let a: string[] = [];
-            this.$(tr.get(i)).children().each((index, element) => {
+            for await (const element of this.$(tr.get(i)).children()) {
                 let e = this.$(element)
                 let text = e.text().trim()
                 if (text.length == 0) {
@@ -166,11 +170,11 @@ class HTMLCommandToMarkdown {
                             a.push("<->");
                         }
                     }
-                    return;
+                    continue;
                 }
                 valid = true;
                 a.push(text);
-            });
+            };
             if (valid)
                 formatedArgs.push(a);
         }
@@ -182,13 +186,13 @@ class HTMLCommandToMarkdown {
         return syntax + "\n" + array + "\n"
     }
 
-    _convertDescription(inDestFolder: string): string {
+    async _convertDescription(inDestFolder: string): Promise<string> {
         let $args = this.$(".command_paragraph");
         if ($args.length == 0) {
             $args = this.$("body")
         }
-        this._convertLinks($args)
-        this._convertPictures(inDestFolder, $args)
+        await this._convertLinks($args)
+        await this._convertPictures(inDestFolder, $args)
         let firstDescription = $args.find(".rte4d").first();
         if (firstDescription.length > 0) {
             firstDescription.prepend("__DESC__")
@@ -197,26 +201,29 @@ class HTMLCommandToMarkdown {
             logger.error({ file: this._command, message: "No Description found" })
         }
 
-        $args.find(".rte4d_prm").each((i, el) => {
+        for await ( const el of $args.find(".rte4d_prm")) {
             this.$(el).replaceWith("<i>" + this.$(el).html() + "</i>")
-        })
-        $args.find("pre").each((i, e) => {
-            let currentLanguage = this.$(e).parent().attr("class");
+        }
+        
+        for await ( const el of $args.find("pre")) {
+            let currentLanguage = this.$(el).parent().attr("class");
             currentLanguage = currentLanguage?.split("code")[1]
-            let content = this.$(e).html();
-            this.$(e).parent().replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
-        })
-        $args.find("code").each((i, e) => {
-            let currentLanguage = this.$(e).parent().attr("class");
+            let content = this.$(el).html();
+            this.$(el).parent().replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
+        }
+        for await( const el of $args.find("code")) {
+            let currentLanguage = this.$(el).parent().attr("class");
             if (!currentLanguage || currentLanguage?.startsWith("language-"))
-                return;
+                continue;
             currentLanguage = currentLanguage?.split("code")[1]
-            let content = this.$(e).text();
-            this.$(e).replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
-        })
-        $args.find("tr").find("br").each((i, el) => {
+            let content = this.$(el).text();
+            this.$(el).replaceWith(`<pre><code class="language-${currentLanguage}">` + content as string + "</pre></code>")
+        }
+
+        for await (const el of $args.find("tr").find("br")) {
             this.$(el).replaceWith("__SPACE__")
-        })
+        }
+
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
@@ -310,19 +317,20 @@ class HTMLCommandToMarkdown {
         return "---\n" +
             "id: " + this._command.getCommandID_Header() + "\n" +
             "title: " + this._command.getCommandName_Header() + "\n" +
+            `slug: /${this.commandType}/${this._command.getCommandID()}` + "\n" +
             "displayed_sidebar: docs\n" +
             "---\n"
     }
 
-    _convertPictures(inDestFolder: string, $args: cheerio.Cheerio) {
+    async _convertPictures(inDestFolder: string, $args: cheerio.Cheerio) {
 
-        $args.find("img").each((i, el) => {
+        for await (const el of $args.find("img")) {
             let imagePath = this.$(el).attr("src");
             if (imagePath && this._command.language) {
                 let parsedImagePath = path.parse(imagePath)
                 let name = parsedImagePath.name + parsedImagePath.ext
-                this.$(el).attr("src", "../assets/en/" + this.commandType + "/" + name)
-                const dest = path.join(inDestFolder, this._command.language, "assets", "en", this.commandType);
+                this.$(el).attr("src", "../assets/en/" + this.assetFolder + "/" + name)
+                const dest = path.join(inDestFolder, this._command.language, "assets", "en", this.assetFolder);
                 if (!fs.existsSync(dest))
                     fs.mkdirSync(dest, { recursive: true })
                 try {
@@ -331,15 +339,17 @@ class HTMLCommandToMarkdown {
                     logger.error({ file: this._command, message: `Image not found: ${imagePath}` })
                 }
             }
-        })
+        }
     }
 
-    _convertLinks($args: cheerio.Cheerio) {
-        $args.find("a").each((i, el) => {
+    async _convertLinks($args: cheerio.Cheerio) {
+        const $links = $args.find("a")
+        for await (const el of $links) {
             let link = this.$(el).attr("href");
             const aClass = this.$(el).attr("class");
             const is4DCode = aClass?.startsWith("code4d")
             if (link && link.endsWith(".html") && !is4DCode) {
+
                 try {
                     let commandLocation;
                     if (link.startsWith("/")) {
@@ -350,8 +360,10 @@ class HTMLCommandToMarkdown {
                     }
                     if (notValidLink.has(link)) {
                         logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
-                        return;
+                        this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
+                        continue;
                     }
+
                     const data = fs.readFileSync(commandLocation)
                     if (HTMLCommandToMarkdown.isLinkACommand(data, commandLocation) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
                         const dest = new Command(link).getCommandID() + ".md";
@@ -367,30 +379,30 @@ class HTMLCommandToMarkdown {
                     this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
                     logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                 }
-
             }
-        })
+        }
     }
 
-    _convertSeeAlso(): string {
+    async _convertSeeAlso(): Promise<string> {
         let $args = this.$("#SeeAlso_title");
-        this._convertLinks($args.next())
+        await this._convertLinks($args.next())
         let markdown = "";
         if ($args.length > 0) {
             markdown = "\n####" + NodeHtmlMarkdown.translate($args.html() as string) + "\n\n"
-            markdown += NodeHtmlMarkdown.translate($args.next().html() as string)
+            markdown += NodeHtmlMarkdown.translate($args.next().html() as string, { emDelimiter: "*" })
         }
 
         return markdown;
     }
 
-    run(inDestFolder: string) {
+    async run(inDestFolder: string) {
         logger.info({ file: this._command })
+        //console.log({ file: this._command })
         let list = []
         list.push(this._createHeader())
-        list.push(this._convertParamsArray());
-        list.push(this._convertDescription(inDestFolder));
-        list.push(this._convertSeeAlso());
+        list.push(await this._convertParamsArray());
+        list.push(await this._convertDescription(inDestFolder));
+        list.push(await this._convertSeeAlso());
 
         return list.join("\n");
     }
@@ -403,21 +415,25 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     if (!fs.existsSync(inDestFolder))
         fs.mkdirSync(inDestFolder);
 
-
     let commandsDone: Set<string> = new Set<string>()
     let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
-    for (const value of g) {
+    let listPromises = []
+    for await (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
-        $("#Title_list").find("a").each((i, el) => {
-
+        const $l = $("#Title_list").find("a")
+        for await (const el of $l) {
             if ($(el).text().length == 1)
-                return;
+                continue;
+
             const commandPath = commandRoot + $(el).attr("href")
             const command = new Command(commandPath)
             const newName = command.getCommandID() + ".md";
-            if (command.language == 'fr' || commandsDone.has(command.language + "/" + newName))
-                return;
+            //console.log(newName)
+            if (command.language === 'fr' || commandsDone.has(command.language + "/" + newName))
+                continue;
+            if (command.language !== 'en')
+                continue;
             let data = fs.readFileSync(commandPath)
             if (data && HTMLCommandToMarkdown.isLinkACommand(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
                 const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
@@ -434,13 +450,20 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
                 commandsDone.add(command.language + "/" + newName)
                 if (newName && command.language) {
                     const dest = path.join(inDestFolder, command.language, c.commandType);
-                    if (!fs.existsSync(dest))
+                    if (!fs.existsSync(dest)) {
                         fs.mkdirSync(dest, { recursive: true })
-                    fs.writeFileSync(path.join(dest, newName), c.run(inDestFolder))
+                    }
+                    listPromises.push((async () => {
+                        const d = await c.run(inDestFolder)
+                        fs.writeFileSync(path.join(dest, newName), d)
+                    })())
                 }
             }
-        })
+        }
     }
+
+    await Promise.all(listPromises)
+
     convertThemesToJSON(listCommandsByTheme)
 }
 
@@ -455,6 +478,11 @@ function convertThemesToJSON(listCommandsByTheme: Map<string, string[]>) {
         themes.push({ type: "category", label: themeName, items: value })
     })
     fs.writeFileSync("themes.json", JSON.stringify(themes, null, 2))
+}
+
+async function test(path: string) {
+    let c = HTMLCommandToMarkdown.FromFile(path, htmlFolder)
+    fs.writeFileSync("test.md", await c.run(mdFolder))
 }
 
 var argv = require('minimist')(process.argv.slice(2));
@@ -472,10 +500,11 @@ if (!mdFolder) {
 fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
-getListOfCommands(htmlFolder, mdFolder)
-//let c = HTMLCommandToMarkdown.FromFile("4Dv20R6\\4D\\20-R6\\ARRAY-TO-LIST.301-6958332.en.html", htmlFolder)
-//let c = new HTMLCommandToMarkdown("resources/OBJET-FIXER-LISTE-PAR-REFERENCE.301-6958775.fr.html", "")
-//fs.writeFileSync("test.md", c.run(mdFolder))
+getListOfCommands(htmlFolder, mdFolder).then(() => {
+    console.log("Done")
+})
+//test("4Dv20R6\\4D\\20-R6\\Active-transaction.301-6958363.en.html")
 
-console.log("Done")
+
+
 
