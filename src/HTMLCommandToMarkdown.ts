@@ -101,13 +101,13 @@ export class HTMLCommandToMarkdown {
                     if (image) {
                         valid = true;
                         if (image.endsWith("in_out1.png")) {
-                            a.push("&rarr;");
+                            a.push("&#x1F852;");
                         }
                         else if (image.endsWith("in_out0.png")) {
-                            a.push("&larr;");
+                            a.push("&#x1F850;");
                         }
                         else if (image.endsWith("in_out2.png")) {
-                            a.push("&harr;");
+                            a.push("&#x1F858;");
                         }
                     }
                     continue;
@@ -167,11 +167,41 @@ export class HTMLCommandToMarkdown {
             this.$(el).replaceWith("__SPACE__")
         }
 
+        for await (const el of $args.find("table table")) {
+
+
+            for await(const thead of this.$(el).find("thead")) {
+                this.$(thead).replaceWith(`__THEAD__${this.$(thead).html()}__ETHEAD__`)
+            }
+            for await(const tbody of this.$(el).find("tbody")) {
+                this.$(tbody).replaceWith(`__TBODY__${this.$(tbody).html()}__ETBODY__`)
+            }
+            for await(const tr of this.$(el).find("tr")) {
+                this.$(tr).replaceWith(`__TR__${this.$(tr).html()}__ETR__`)
+            }
+            for await(const td of this.$(el).find("td")) {
+                this.$(td).replaceWith(`__TD__${this.$(td).html()}__ETD__`)
+            }
+            this.$(el).replaceWith(`__TABLE__${this.$(el).html()}__ETABLE__`)
+        }
+
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.getCommandName()}.Summary-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
+
+        markdown = markdown.replace(/\\_\\_TABLE\\_\\_/g, "<table>")
+        markdown = markdown.replace(/\\_\\_ETABLE\\_\\_/g, "</table>")
+        markdown = markdown.replace(/\\_\\_THEAD\\_\\_/g, "<thead>")
+        markdown = markdown.replace(/\\_\\_ETHEAD\\_\\_/g, "</thead>")
+        markdown = markdown.replace(/\\_\\_TBODY\\_\\_/g, "<tbody>")
+        markdown = markdown.replace(/\\_\\_ETBODY\\_\\_/g, "</tbody>")
+        markdown = markdown.replace(/\\_\\_TR\\_\\_/g, "<tr>")
+        markdown = markdown.replace(/\\_\\_ETR\\_\\_/g, "</tr>")
+        markdown = markdown.replace(/\\_\\_TD\\_\\_/g, "<td>")
+        markdown = markdown.replace(/\\_\\_ETD\\_\\_/g, "</td>")
+
         markdown = this._convertOld4DCode(markdown)
 
         return markdown

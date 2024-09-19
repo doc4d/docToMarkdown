@@ -94,10 +94,10 @@ if (!mdFolder) {
 fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
-//getListOfCommands(htmlFolder, mdFolder).then(() => {
+getListOfCommands(htmlFolder, mdFolder).then(() => {
 //    console.log("Done")
-//})
-test("4Dv20R6\\4D\\20-R6\\Get-application-info.301-6958701.en.html")
+})
+//test("4Dv20R6\\4D\\20-R6\\Get-application-info.301-6958701.en.html")
 
 
 
