@@ -7,7 +7,6 @@ import path from "path"
 import winston from 'winston';
 
 
-
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(winston.format.json()),
@@ -104,11 +103,18 @@ class HTMLCommandToMarkdown {
         return new HTMLCommandToMarkdown(inFile, inFileData, inRootFolder)
     }
 
-    static isLinkACommand(file: Buffer, inFile: string): boolean {
+    static isLinkACommandFromLanguage(file: Buffer, inFile: string): boolean {
         if (inFile.includes("301-")) {
             let s = file.toString()
             return (s.includes("100-6957482") /*language*/
                 || s.includes("100-6993921")/*write pro*/) && s.includes("ak_700.png") && !s.includes("ak_610.png")
+        }
+        return false;
+    }
+
+    static isLinkACommand(inFile: string): boolean {
+        if (inFile.includes("301-")) {
+            return true;
         }
         return false;
     }
@@ -134,9 +140,6 @@ class HTMLCommandToMarkdown {
             const row = data[i];
             markdownTable += '| ' + row.join(' | ') + ' |\n';
         }
-        markdownTable = markdownTable.replace(/->/g, "&rarr;")
-        markdownTable = markdownTable.replace(/<->/g, "&harr;")
-        markdownTable = markdownTable.replace(/<-/g, "&larr;")
 
         return markdownTable;
     }
@@ -161,18 +164,21 @@ class HTMLCommandToMarkdown {
                     if (image) {
                         valid = true;
                         if (image.endsWith("in_out1.png")) {
-                            a.push("->");
+                            a.push("&rarr;");
                         }
                         else if (image.endsWith("in_out0.png")) {
-                            a.push("<-");
+                            a.push("&larr;");
                         }
                         else if (image.endsWith("in_out2.png")) {
-                            a.push("<->");
+                            a.push("&harr;");
                         }
                     }
                     continue;
                 }
                 valid = true;
+                text = text.replace(/\|/g, "&#124;")
+                text = text.replace(/(\r\n|\r|\n)/g, "<br/>")
+
                 a.push(text);
             };
             if (valid)
@@ -348,8 +354,7 @@ class HTMLCommandToMarkdown {
             let link = this.$(el).attr("href");
             const aClass = this.$(el).attr("class");
             const is4DCode = aClass?.startsWith("code4d")
-            if (link && link.endsWith(".html") && !is4DCode) {
-
+            if (link && link.includes(".html") && !is4DCode) {
                 try {
                     let commandLocation;
                     if (link.startsWith("/")) {
@@ -363,17 +368,24 @@ class HTMLCommandToMarkdown {
                         this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
                         continue;
                     }
-
-                    const data = fs.readFileSync(commandLocation)
-                    if (HTMLCommandToMarkdown.isLinkACommand(data, commandLocation) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
-                        const dest = new Command(link).getCommandID() + ".md";
-                        this.$(el).attr("href", dest);
+                    if (HTMLCommandToMarkdown.isLinkACommand(commandLocation)) {
+                        const data = fs.readFileSync(commandLocation)
+                        if (HTMLCommandToMarkdown.isLinkACommandFromLanguage(data, commandLocation) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
+                            const dest = new Command(link).getCommandID() + ".md";
+                            this.$(el).attr("href", dest);
+                        }
+                        else {
+                            notValidLink.add(link);
+                            this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
+                            logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
+                        }
                     }
                     else {
                         notValidLink.add(link);
                         this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
                         logger.error({ message: `Cannot convert link: ${link}`, file: this._command })
                     }
+
                 } catch (e) {
                     notValidLink.add(link);
                     this.$(el).replaceWith(`<em>${this.$(el).text()}</em>`);
@@ -418,7 +430,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     let commandsDone: Set<string> = new Set<string>()
     let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
-    for await (const value of g) {
+    for (const value of g) {
         let $ = cheerio.load(fs.readFileSync(value));
         const $l = $("#Title_list").find("a")
         for (const el of $l) {
@@ -428,32 +440,35 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
             const commandPath = commandRoot + $(el).attr("href")
             const command = new Command(commandPath)
             const newName = command.getCommandID() + ".md";
-            //console.log(newName)
+            console.log(newName)
             if (command.language === 'fr' || commandsDone.has(command.language + "/" + newName))
                 continue;
-            let data = fs.readFileSync(commandPath)
-            if (data && HTMLCommandToMarkdown.isLinkACommand(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
-                const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
-                if (command.language == "en") {
-                    const theme = command.language + "/" + c.getTheme()
-                    let list = listCommandsByTheme.get(theme)
-                    if (!list) {
-                        list = []
+            if (HTMLCommandToMarkdown.isLinkACommand(commandPath)) {
+                let data = fs.readFileSync(commandPath)
+                if (data && HTMLCommandToMarkdown.isLinkACommandFromLanguage(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
+                    const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
+                    if (command.language == "en") {
+                        const theme = command.language + "/" + c.getTheme()
+                        let list = listCommandsByTheme.get(theme)
+                        if (!list) {
+                            list = []
+                        }
+                        list.push(c.commandType + "/" + command.getCommandID())
+                        listCommandsByTheme.set(theme, list)
                     }
-                    list.push(c.commandType + "/" + command.getCommandID())
-                    listCommandsByTheme.set(theme, list)
-                }
 
-                commandsDone.add(command.language + "/" + newName)
-                if (newName && command.language) {
-                    const dest = path.join(inDestFolder, command.language, c.commandType);
-                    if (!fs.existsSync(dest)) {
-                        fs.mkdirSync(dest, { recursive: true })
+                    commandsDone.add(command.language + "/" + newName)
+                    if (newName && command.language) {
+                        const dest = path.join(inDestFolder, command.language, c.commandType);
+                        if (!fs.existsSync(dest)) {
+                            fs.mkdirSync(dest, { recursive: true })
+                        }
+                        const d = await c.run(inDestFolder)
+                        fs.writeFileSync(path.join(dest, newName), d)
                     }
-                    const d = await c.run(inDestFolder)
-                    fs.writeFileSync(path.join(dest, newName), d)
                 }
             }
+
         }
     }
 
@@ -475,7 +490,7 @@ function convertThemesToJSON(listCommandsByTheme: Map<string, string[]>) {
 
 async function test(path: string) {
     let c = HTMLCommandToMarkdown.FromFile(path, htmlFolder)
-    console.log("Is a command", HTMLCommandToMarkdown.isLinkACommand(fs.readFileSync(path), path))
+    console.log("Is a command", HTMLCommandToMarkdown.isLinkACommandFromLanguage(fs.readFileSync(path), path))
     fs.writeFileSync("test.md", await c.run(mdFolder))
 }
 
@@ -497,7 +512,7 @@ fs.rmSync("error.log", { force: true })
 getListOfCommands(htmlFolder, mdFolder).then(() => {
     console.log("Done")
 })
-//test("4Dv20R6\\4D\\20-R6\\SVG-Export-to-picture.301-7184764.en.html")
+//test("4Dv20R6\\4D\\20-R6\\LISTBOX-SELECT-ROW.301-6958160.en.html")
 
 
 
