@@ -13,6 +13,7 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
         fs.mkdirSync(inDestFolder);
 
     let commandsDone: Set<string> = new Set<string>()
+    let listCommands: any[] = []
     let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
     let g = new Glob([commandRoot + "*.902-*"], {});
     for (const value of g) {
@@ -50,16 +51,43 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
                         }
                         const d = await c.run(inDestFolder)
                         fs.writeFileSync(path.join(dest, newName), d)
+                        if (command.language == "en") {
+                            listCommands.push({ name: command.getCommandName(), dest: "../" + c.commandType + "/" + newName });
+                        }
                     }
                 }
             }
-
         }
     }
 
     convertThemesToJSON(listCommandsByTheme)
+    createIndex(listCommands)
 }
 
+function createIndex(listCommands: any[]) {
+
+    listCommands.sort((a, b) => {
+        return a.name.localeCompare(b.name)
+    })
+    let data = ""
+    let currentLetter = ""
+    let previousLetter = ""
+    for (let command of listCommands) {
+        currentLetter = command.name[0].toUpperCase()
+        if(currentLetter != previousLetter) {
+            if(previousLetter != "") {
+                data += `</TabItem>\n`
+            }
+            data += `<TabItem value="${currentLetter}">\n`
+
+        }
+        data += `[\`${command.name}\`](${command.dest})<br/>\n`
+        previousLetter = currentLetter
+    }
+    data += `</TabItem>\n`
+
+    fs.writeFileSync("command-index.md", data)
+}
 
 function convertThemesToJSON(listCommandsByTheme: Map<string, string[]>) {
     let themes: any = []
@@ -95,7 +123,7 @@ fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
 getListOfCommands(htmlFolder, mdFolder).then(() => {
-//    console.log("Done")
+    //    console.log("Done")
 })
 //test("4Dv20R6\\4D\\20-R6\\Get-application-info.301-6958701.en.html")
 

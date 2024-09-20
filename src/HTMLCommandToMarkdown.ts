@@ -22,14 +22,25 @@ export class HTMLCommandToMarkdown {
     private _rootFolder: string;
     public commandType: string = "commands-legacy";
     public assetFolder: string = "commands";
+    public slug: string = "commands";
 
     private constructor(inFile: string, inFileData: Buffer, inRootFolder: string) {
         this.$ = cheerio.load(inFileData);
         this._command = new Command(inFile)
         this._rootFolder = inRootFolder;
-        const isWP = inFileData.includes("100-6993921") && this._command.getCommandID().startsWith("wp")
-        this.commandType = isWP ? "WP" : "commands-legacy";
-        this.assetFolder = isWP ? "WP" : "commands";
+        const commandInfo = HTMLCommandToMarkdown.GetCommandInfo(inFile, inFileData)
+        this.commandType = commandInfo.commandType;
+        this.assetFolder = commandInfo.assetFolder;
+        this.slug = commandInfo.slug;
+    }
+
+    static GetCommandInfo(inFile: string, inFileData: Buffer): any {
+        const isWP = inFileData.includes("100-6993921") && new Command(inFile).getCommandID().startsWith("wp")
+        return {
+            commandType: isWP ? "WritePro/commands-legacy" : "commands-legacy",
+            assetFolder: isWP ? "WritePro/commands" : "commands",
+            slug: isWP ? "WritePro/commands" : "commands"
+        }
     }
 
     static FromFile(inFile: string, inRootFolder: string): HTMLCommandToMarkdown {
@@ -57,7 +68,7 @@ export class HTMLCommandToMarkdown {
     }
 
     static isDeprecated(file: string): boolean {
-        return path.parse(file).name.startsWith("o-")
+        return path.parse(file).name.toLowerCase().startsWith("o-")
     }
 
     getTheme(): string {
@@ -168,18 +179,16 @@ export class HTMLCommandToMarkdown {
         }
 
         for await (const el of $args.find("table table")) {
-
-
-            for await(const thead of this.$(el).find("thead")) {
+            for await (const thead of this.$(el).find("thead")) {
                 this.$(thead).replaceWith(`__THEAD__${this.$(thead).html()}__ETHEAD__`)
             }
-            for await(const tbody of this.$(el).find("tbody")) {
+            for await (const tbody of this.$(el).find("tbody")) {
                 this.$(tbody).replaceWith(`__TBODY__${this.$(tbody).html()}__ETBODY__`)
             }
-            for await(const tr of this.$(el).find("tr")) {
+            for await (const tr of this.$(el).find("tr")) {
                 this.$(tr).replaceWith(`__TR__${this.$(tr).html()}__ETR__`)
             }
-            for await(const td of this.$(el).find("td")) {
+            for await (const td of this.$(el).find("td")) {
                 this.$(td).replaceWith(`__TD__${this.$(td).html()}__ETD__`)
             }
             this.$(el).replaceWith(`__TABLE__${this.$(el).html()}__ETABLE__`)
@@ -188,7 +197,7 @@ export class HTMLCommandToMarkdown {
         let markdown = NodeHtmlMarkdown.translate($args.html() as string, { emDelimiter: "*" })
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
         markdown = markdown.replace(/\\_\\_SPACE\\_\\_/g, "<br/>")
-        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+(.*?[\.。])(?!md)/, `<!--REF #_command_.${this._command.getCommandName()}.Summary-->$1<!-- END REF-->`)
+        markdown = markdown.replace(/\\_\\_DESC\\_\\_\s+((?:[^.()。]*\([^)]*\))*[^.。]*[。\.])/, `<!--REF #_command_.${this._command.getCommandName()}.Summary-->$1<!-- END REF-->`)
         markdown = markdown.replace(/\\_\\_DESC\\_\\_/, "")
 
         markdown = markdown.replace(/\\_\\_TABLE\\_\\_/g, "<table>")
@@ -290,7 +299,7 @@ export class HTMLCommandToMarkdown {
         return "---\n" +
             "id: " + this._command.getCommandID_Header() + "\n" +
             "title: " + this._command.getCommandName_Header() + "\n" +
-            `slug: /${this.commandType}/${this._command.getCommandID()}` + "\n" +
+            `slug: /${this.slug}/${this._command.getCommandID()}` + "\n" +
             "displayed_sidebar: docs\n" +
             "---\n"
     }
@@ -338,7 +347,18 @@ export class HTMLCommandToMarkdown {
                     if (HTMLCommandToMarkdown.isLinkACommand(commandLocation)) {
                         const data = fs.readFileSync(commandLocation)
                         if (HTMLCommandToMarkdown.isLinkACommandFromLanguage(data, commandLocation) && !HTMLCommandToMarkdown.isDeprecated(commandLocation)) {
-                            const dest = new Command(link).getCommandID() + ".md";
+
+                            const commandInfo = HTMLCommandToMarkdown.GetCommandInfo(commandLocation, data)
+                            let root = "";
+                            if(commandInfo.commandType != this.commandType){
+                                if(this.commandType == "commands-legacy"){
+                                    root = "../" + commandInfo.commandType + "/"
+                                }
+                                else if(this.commandType == "WritePro/commands-legacy"){
+                                    root = "../../" + commandInfo.commandType + "/"
+                                }
+                            }
+                            const dest = root + new Command(link).getCommandID() + ".md";
                             this.$(el).attr("href", dest);
                         }
                         else {
