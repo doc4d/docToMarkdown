@@ -15,49 +15,44 @@ async function getListOfCommands(inRootFolder: string, inDestFolder: string) {
     let commandsDone: Set<string> = new Set<string>()
     let listCommands: any[] = []
     let listCommandsByTheme: Map<string, string[]> = new Map<string, string[]>()
-    let g = new Glob([commandRoot + "*.902-*"], {});
+    let g = new Glob([commandRoot + "*.301-*"], {});
     for (const value of g) {
-        let $ = cheerio.load(fs.readFileSync(value));
-        const $l = $("#Title_list").find("a")
-        for (const el of $l) {
-            if ($(el).text().length == 1)
-                continue;
 
-            const commandPath = commandRoot + $(el).attr("href")
-            const command = new Command(commandPath)
-            const newName = command.getCommandID() + ".md";
-            console.log(newName)
-            if (command.language === 'fr' || commandsDone.has(command.language + "/" + newName))
-                continue;
-            if (HTMLCommandToMarkdown.isLinkACommand(commandPath)) {
-                let data = fs.readFileSync(commandPath)
-                if (data && HTMLCommandToMarkdown.isLinkACommandFromLanguage(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
-                    const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
-                    if (command.language == "en") {
-                        const theme = command.language + "/" + c.getTheme()
-                        let list = listCommandsByTheme.get(theme)
-                        if (!list) {
-                            list = []
-                        }
-                        list.push(c.commandType + "/" + command.getCommandID())
-                        listCommandsByTheme.set(theme, list)
+        const commandPath = value
+        const command = new Command(commandPath)
+        const newName = command.getCommandID() + ".md";
+        console.log(newName)
+        if (command.language === 'fr' || commandsDone.has(command.language + "/" + newName))
+            continue;
+        if (HTMLCommandToMarkdown.isLinkACommand(commandPath)) {
+            let data = fs.readFileSync(commandPath)
+            if (data && HTMLCommandToMarkdown.isLinkACommandFromLanguage(data, commandPath) && !HTMLCommandToMarkdown.isDeprecated(commandPath)) {
+                const c = HTMLCommandToMarkdown.FromFileData(commandPath, data, commandRoot)
+                if (command.language == "en") {
+                    const theme = command.language + "/" + c.getTheme()
+                    let list = listCommandsByTheme.get(theme)
+                    if (!list) {
+                        list = []
                     }
+                    list.push(c.commandType + "/" + command.getCommandID())
+                    listCommandsByTheme.set(theme, list)
+                }
 
-                    commandsDone.add(command.language + "/" + newName)
-                    if (newName && command.language) {
-                        const dest = path.join(inDestFolder, command.language, c.commandType);
-                        if (!fs.existsSync(dest)) {
-                            fs.mkdirSync(dest, { recursive: true })
-                        }
-                        const d = await c.run(inDestFolder)
-                        fs.writeFileSync(path.join(dest, newName), d)
-                        if (command.language == "en") {
-                            listCommands.push({ name: command.getCommandName(), dest: "../" + c.commandType + "/" + newName });
-                        }
+                commandsDone.add(command.language + "/" + newName)
+                if (newName && command.language) {
+                    const dest = path.join(inDestFolder, command.language, c.commandType);
+                    if (!fs.existsSync(dest)) {
+                        fs.mkdirSync(dest, { recursive: true })
+                    }
+                    const d = await c.run(inDestFolder)
+                    fs.writeFileSync(path.join(dest, newName), d)
+                    if (command.language == "en") {
+                        listCommands.push({ name: command.getCommandName(), dest: "../" + c.commandType + "/" + newName });
                     }
                 }
             }
         }
+
     }
 
     convertThemesToJSON(listCommandsByTheme)
@@ -69,22 +64,35 @@ function createIndex(listCommands: any[]) {
     listCommands.sort((a, b) => {
         return a.name.localeCompare(b.name)
     })
-    let data = ""
+    let data = "---\n" +
+        "id: command-index\n" +
+        "title: Index\n" +
+        "---\n\n"
     let currentLetter = ""
     let previousLetter = ""
+    //[4D](#4D)
     for (let command of listCommands) {
         currentLetter = command.name[0].toUpperCase()
-        if(currentLetter != previousLetter) {
-            if(previousLetter != "") {
-                data += `</TabItem>\n`
-            }
-            data += `<TabItem value="${currentLetter}">\n`
+        let letters = currentLetter == '4' ? currentLetter + 'D' : currentLetter;
+        if (currentLetter != previousLetter) {
+            data += `[${letters}](#${letters}) - `
+        }
+        previousLetter = currentLetter
+    }
+    data = data.slice(0, -3)
+    data += "\n\n"
+    currentLetter = ""
+    previousLetter = ""
 
+    for (let command of listCommands) {
+        currentLetter = command.name[0].toUpperCase()
+        let letters = currentLetter == '4' ? currentLetter + 'D' : currentLetter;
+        if (currentLetter != previousLetter) {
+            data += `\n<a id="${letters}"><b>${letters}</b></a>\n\n`
         }
         data += `[\`${command.name}\`](${command.dest})<br/>\n`
         previousLetter = currentLetter
     }
-    data += `</TabItem>\n`
 
     fs.writeFileSync("command-index.md", data)
 }
@@ -118,14 +126,14 @@ if (!mdFolder) {
 }
 
 
-//fs.rmSync(mdFolder, { recursive: true, force: true })
+fs.rmSync(mdFolder, { recursive: true, force: true })
 fs.rmSync("combined.log", { force: true })
 fs.rmSync("error.log", { force: true })
 
 getListOfCommands(htmlFolder, mdFolder).then(() => {
     //    console.log("Done")
 })
-//test("4Dv20R6\\4D\\20-R6\\Get-application-info.301-6958701.en.html")
+//test("4Dv20R6\\4D\\20-R6\\WP-EXPORT-DOCUMENT.301-6993969.ja.html")
 
 
 

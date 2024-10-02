@@ -22,6 +22,7 @@ export class HTMLCommandToMarkdown {
     private _rootFolder: string;
     public commandType: string = "commands-legacy";
     public assetFolder: string = "commands";
+    public assetFolderLocation : string = "../assets/en/"
     public slug: string = "commands";
 
     private constructor(inFile: string, inFileData: Buffer, inRootFolder: string) {
@@ -31,6 +32,7 @@ export class HTMLCommandToMarkdown {
         const commandInfo = HTMLCommandToMarkdown.GetCommandInfo(inFile, inFileData)
         this.commandType = commandInfo.commandType;
         this.assetFolder = commandInfo.assetFolder;
+        this.assetFolderLocation = commandInfo.assetFolderLocation;
         this.slug = commandInfo.slug;
     }
 
@@ -39,6 +41,7 @@ export class HTMLCommandToMarkdown {
         return {
             commandType: isWP ? "WritePro/commands-legacy" : "commands-legacy",
             assetFolder: isWP ? "WritePro/commands" : "commands",
+            assetFolderLocation: isWP ? "../../assets/en/" : "../assets/en/",
             slug: isWP ? "WritePro/commands" : "commands"
         }
     }
@@ -311,7 +314,7 @@ export class HTMLCommandToMarkdown {
             if (imagePath && this._command.language) {
                 let parsedImagePath = path.parse(imagePath)
                 let name = parsedImagePath.name + parsedImagePath.ext
-                this.$(el).attr("src", "../assets/en/" + this.assetFolder + "/" + name)
+                this.$(el).attr("src", this.assetFolderLocation + this.assetFolder + "/" + name)
                 const dest = path.join(inDestFolder, this._command.language, "assets", "en", this.assetFolder);
                 if (!fs.existsSync(dest))
                     fs.mkdirSync(dest, { recursive: true })
