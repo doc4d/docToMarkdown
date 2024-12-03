@@ -1,0 +1,122 @@
+/*
+image/prop/ok.xx.png	OK AddSettings	2	The OK variable is changed by the command
+    /image/prop/setting.xx.png	Stub AddSettings	3	When applied to an object of the current class, this method will always return the same value
+    /image/prop/leaks.xx.png	Memory leaks AddSettings	4	Can provoke memory leaks if the code does not delete references after use
+    /image/prop/document.xx.png	Document AddSettings	5	This command modifies the system Document variable
+    /image/prop/lockedset.xx.png	LockedSet AddSettings	6	This command modifies the LockedSet system set
+    /image/prop/userset.xx.png	UserSet AddSettings	7	This command modifies the UsertSer system set
+    /image/prop/error.xx.png	Error AddSettings	8	This command modifies the Error system variable
+    /image/prop/currentrecord.xx.png	Current record AddSettings	10	This command changes the currrent record
+    /image/prop/currentsel.xx.png	Current selection AddSettings	11	The command changes the current selection
+    /image/prop/preemption.xx.png	Preemptive AddSettings	13	This command can be run in preemptive processes
+    /image/prop/unicode.xx.png	Unicode AddSettings	20	The Unicode mode affects this command
+    /image/prop/remotedifferent.xx.png	Remote different AddSettings	40	Different in remote mode
+    /image/prop/notcs.xx.png	Not for server AddSettings	41	Not for server
+    /image/prop/trigger.xx.png	Not for trigger AddSettings	44	Cannot be used in triggers
+    /image/prop/mac.xx.png	Mac OS AddSettings	50	This command has platform-specific behavior
+    /image/prop/windows.xx.png	Windows AddSettings	51	This command has platform-specific behavior
+    /image/prop/32bits.xx.png	Not for 32-bit versions AddSettings	52	Feature(s) not available in 4D 32 bits
+    /image/prop/setting.xx.png	Setting AddSettings	100	Database parameters affect this command
+    /image/prop/network.xx.png	Network AddSettings	110	Commande provoquant un échange entre le client et le serveur
+    /image/prop/expe.xx.png	experimental AddSettings	200	This API is experimental and should not be used in production
+
+
+*/
+
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fs};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Properties {
+    command_id: usize,
+    preemptive: bool,
+    modify_ok: bool, // The OK variable is changed by the command
+    // The command modifies the system Document variable
+    modify_document: bool,
+    // The command modifies the LockedSet system set
+    modify_locked_set: bool,
+    // The command modifies the UsertSer system set
+    modify_user_set: bool,
+    // The command modifies the Error system variable
+    modify_error: bool,
+    // The command changes the currrent record
+    modify_record: bool,
+    // The command changes the current selection
+    modify_selection: bool,
+    // The command is different in remote
+    remote: bool,
+    // The command is not for the server
+    not_for_server: bool,
+}
+
+impl Properties {
+    fn new() -> Self {
+        Self {
+            command_id: 0,
+            preemptive: false,
+            modify_ok: false,
+            modify_document: false,
+            modify_locked_set: false,
+            modify_user_set: false,
+            modify_error: false,
+            modify_record: false,
+            modify_selection: false,
+            remote: false,
+            not_for_server: false,
+        }
+    }
+
+    fn from(content: &str) -> Option<Self> {
+        let mut properties = Self::new();
+        if let Ok(regex_command_number) = regex::Regex::new(r#"Number\s?:\s*(\d+)"#) {
+            regex_command_number.captures(content).map(|cap| {
+                properties.command_id = cap[1].parse().unwrap_or(0);
+            });
+        }
+        properties.preemptive = content.contains("100-6957482");
+        properties.modify_ok = content.contains("image/prop/ok.xx.png");
+        properties.modify_document = content.contains("image/prop/document.xx.png");
+        properties.modify_locked_set = content.contains("image/prop/lockedset.xx.png");
+        properties.modify_user_set = content.contains("image/prop/userset.xx.png");
+        properties.modify_error = content.contains("image/prop/error.xx.png");
+        properties.modify_record = content.contains("image/prop/currentrecord.xx.png");
+        properties.modify_selection = content.contains("image/prop/currentsel.xx.png");
+        properties.remote = content.contains("image/prop/remotedifferent.xx.png");
+        properties.not_for_server = content.contains("image/prop/notcs.xx.png");
+        if properties.command_id == 0 {
+            None
+        } else {
+            Some(properties)
+        }
+    }
+}
+
+fn is_command(in_content: &str) -> bool {
+    in_content.contains("100-6957482") /*language*/
+    || in_content.contains("100-6993921")/*write pro*/ 
+    && in_content.contains("ak_700.png") 
+    && !in_content.contains("ak_610.png")
+}
+
+fn main() -> Result<(), anyhow::Error> {
+    let mut list_properties = HashMap::new();
+
+    for entry in glob::glob("../4Dv20R6/4D/20-R6/*.301-*")? {
+        let entry = entry?;
+        let content = std::fs::read_to_string(entry.as_path())?;
+        if is_command(&content) {
+            if let Some(file_name) = entry.as_path().file_stem() {
+                let str = file_name.to_str().unwrap_or("");
+                let command_name = str.split(".").next().unwrap_or("").to_lowercase();
+
+                if str.ends_with("en") && !str.starts_with("o-") {
+                    list_properties.insert(command_name, Properties::from(&content));
+                }
+            }
+        }
+    }
+    let output = serde_json::to_string_pretty(&list_properties)?;
+    //let output = serde_json::to_string(&list_properties)?;
+    fs::write("properties.json", output)?;
+    Ok(())
+}
