@@ -1,0 +1,52 @@
+{
+    "en": {
+        "command_number": "Command number",
+        "thread_safe": "Thread safe",
+        "modifies_variables": "Modifies variables",
+        "changes_current_record": "Changes current record",
+        "changes_current_selection": "Changes current selection",
+        "forbidden_on_server": "Forbidden on the server",
+        "comma": ", ",
+        "properties": "Properties"
+    },
+    "es": {
+        "command_number": "Número de comando",
+        "thread_safe": "Hilo seguro",
+        "modifies_variables": "Modifica variables",
+        "changes_current_record": "Modifica el registro actual",
+        "changes_current_selection": "Modifica la selección actual",
+        "forbidden_on_server": "Prohibido en el servidor",
+        "comma": ", ",
+        "properties": "Propiedades"
+    },
+    "pt": {
+        "command_number": "Número do comando",
+        "thread_safe": "Thread-seguro",
+        "modifies_variables": "Modificar variáveis",
+        "changes_current_record": "Modificar o registro atual",
+        "changes_current_selection": "Modificar a seleção atual",
+        "forbidden_on_server": "Proibido no servidor",
+        "comma": ", ",
+        "properties": "Propriedades"
+    },
+    "ja": {
+        "command_number": "コマンド番号",
+        "thread_safe": "スレッドセーフである",
+        "modifies_variables": "システム変数を更新する",
+        "changes_current_record": "カレントレコードを変更する",
+        "changes_current_selection": "カレントセレクションを変更する",
+        "forbidden_on_server": "サーバー上での使用は不可",
+        "comma": "、",
+        "properties": "プロパティ"
+    },
+    "fr": {
+        "command_number": "Numéro de commande",
+        "thread_safe": "Thread safe",
+        "modifies_variables": "Modifie les variables",
+        "changes_current_record": "Change l'enregistrement courant",
+        "changes_current_selection": "Change la sélection courante",
+        "forbidden_on_server": "Interdite sur le serveur",
+        "comma": ", ",
+        "properties": "Propriétés"
+    }
+}

@@ -23,8 +23,21 @@ image/prop/ok.xx.png	OK AddSettings	2	The OK variable is changed by the command
 
 */
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Translation {
+    command_number: String,
+    thread_safe: String,
+    modifies_variables: String,
+    changes_current_record: String,
+    changes_current_selection: String,
+    forbidden_on_server: String,
+    comma: String,
+    properties : String
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Properties {
@@ -89,6 +102,60 @@ impl Properties {
             Some(properties)
         }
     }
+
+    fn to_string(&self, translation: &Translation) -> String {
+        let mut output = String::new();
+        output.push_str("|  |  |\n");
+        output.push_str("| --- | --- |\n");
+        output.push_str(
+            format!("| {} | {} |\n", translation.command_number, self.command_id).as_str(),
+        );
+
+        if self.preemptive {
+            output.push_str(format!("| {} | {} |\n", translation.thread_safe, "&check;").as_str());
+        }
+        else {
+            output.push_str(format!("| {} | {} |\n", translation.thread_safe, "&cross;").as_str());
+        }
+
+        let mut list_modified_variables = vec![];
+        if self.modify_ok {
+            list_modified_variables.push("OK");
+        }
+        if self.modify_document {
+            list_modified_variables.push("Document");
+        }
+        if self.modify_error {
+            list_modified_variables.push("error");
+        }
+        if !list_modified_variables.is_empty()
+        {
+            output.push_str(
+                format!(
+                    "| {} | {} |\n",
+                    translation.modifies_variables,
+                    list_modified_variables
+                        .join(translation.comma.as_str())
+                        .as_str()
+                )
+                .as_str(),
+            );
+        }
+
+
+        if self.modify_record {
+            output.push_str(format!("| {} ||\n", translation.changes_current_record).as_str());
+        }
+
+        if self.modify_selection {
+            output.push_str(format!("| {} ||\n", translation.changes_current_selection).as_str());
+        }
+
+        if !self.remote {
+            output.push_str(format!("| {} ||\n", translation.forbidden_on_server).as_str());
+        }
+        output
+    }
 }
 
 fn is_command(in_content: &str) -> bool {
@@ -98,7 +165,7 @@ fn is_command(in_content: &str) -> bool {
     && !in_content.contains("ak_610.png")
 }
 
-fn main() -> Result<(), anyhow::Error> {
+fn create_properties() -> Result<HashMap<String, Option<Properties>>, anyhow::Error> {
     let mut list_properties = HashMap::new();
 
     for entry in glob::glob("../4Dv20R6/4D/20-R6/*.301-*")? {
@@ -115,8 +182,104 @@ fn main() -> Result<(), anyhow::Error> {
             }
         }
     }
-    let output = serde_json::to_string_pretty(&list_properties)?;
+    Ok(list_properties)
+}
+
+fn remove_old_message(list: &Vec<&str>) -> Result<(), anyhow::Error> {
+    let regex = Regex::new(r#"(Params-->[\S\s]*?<!--\s*END REF\s*-->)(\s*\*.*?\*\s)"#)?;
+    for directory in list {
+        for entry in glob::glob(directory)? {
+            let entry = entry?;
+            let path = entry.as_path();
+            let mut content = fs::read_to_string(path)?;
+            content = regex.replace(&content, "$1").to_string();
+            fs::write(&path, content)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn build_property_to_display(
+    language: &str,
+    command_name: &str,
+    list_translations: &HashMap<String, Translation>,
+    list_properties: &HashMap<String, Option<Properties>>,
+) -> Option<String> {
+    let mut output = String::new();
+    if let Some(properties) = list_properties
+        .get(command_name)
+        .and_then(|opt| opt.as_ref())
+    {
+        let translation = list_translations.get(language)?;
+        let properties_str = properties.to_string(translation);
+        output.push_str("\n\n");
+        output.push_str(format!("{}\n", translation.properties).as_str());
+        output.push_str(properties_str.as_str());
+        output.push_str("\n\n");
+    }
+
+    Some(output)
+}
+
+fn add_prperties(
+    list: &Vec<&str>,
+    list_properties: &HashMap<String, Option<Properties>>,
+    list_translations: &HashMap<String, Translation>,
+) -> Result<(), anyhow::Error> {
+    for directory in list {
+        let mut language = "en".to_string();
+
+
+        for entry in glob::glob(directory)? {
+            let entry = entry?;
+            let path = entry.as_path();
+            let path_str = path.to_str().unwrap_or("").to_string();
+            if let Some(ipos) = &path_str.find("i18n") {
+                let lang = path_str[ipos + 5..ipos + 7].to_string();
+                language = lang.clone();
+            }
+            let command_name = path
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .split(".")
+                .next()
+                .unwrap()
+                .to_lowercase();
+            if let Some(to_display) = build_property_to_display(
+                &language,
+                &command_name,
+                list_translations,
+                list_properties,
+            ) {
+                let mut content = fs::read_to_string(path)?;
+                content.push_str(to_display.as_str());
+                fs::write(&path, content)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn main() -> Result<(), anyhow::Error> {
+    let list_to_apply = vec![
+        "../../docs/docs/**/*.md",
+        "../../docs/i18n/*/docusaurus-plugin-content-docs/*/commands-legacy/**/*.md",
+        "../../docs/versioned_docs/*/commands-legacy/**/*.md",
+    ];
+    let translation_map = {
+        let content = fs::read_to_string("translations.json")?;
+        serde_json::from_str::<HashMap<String, Translation>>(&content)?
+    };
+    let list_properties: HashMap<String, Option<Properties>> =
+        serde_json::from_str(std::fs::read_to_string("properties.json")?.as_str())?;
+    //let output = serde_json::to_string_pretty(&list_properties)?;
     //let output = serde_json::to_string(&list_properties)?;
-    fs::write("properties.json", output)?;
+    //fs::write("properties.json", output)?;
+    remove_old_message(&list_to_apply)?;
+    add_prperties(&list_to_apply, &list_properties, &translation_map)?;
     Ok(())
 }
