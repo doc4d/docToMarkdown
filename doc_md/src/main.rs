@@ -36,7 +36,7 @@ struct Translation {
     changes_current_selection: String,
     forbidden_on_server: String,
     comma: String,
-    properties : String
+    properties: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +86,7 @@ impl Properties {
                 properties.command_id = cap[1].parse().unwrap_or(0);
             });
         }
-        properties.preemptive = content.contains("100-6957482");
+        properties.preemptive = content.contains("image/prop/preemption.xx.png");
         properties.modify_ok = content.contains("image/prop/ok.xx.png");
         properties.modify_document = content.contains("image/prop/document.xx.png");
         properties.modify_locked_set = content.contains("image/prop/lockedset.xx.png");
@@ -113,8 +113,7 @@ impl Properties {
 
         if self.preemptive {
             output.push_str(format!("| {} | {} |\n", translation.thread_safe, "&check;").as_str());
-        }
-        else {
+        } else {
             output.push_str(format!("| {} | {} |\n", translation.thread_safe, "&cross;").as_str());
         }
 
@@ -128,8 +127,7 @@ impl Properties {
         if self.modify_error {
             list_modified_variables.push("error");
         }
-        if !list_modified_variables.is_empty()
-        {
+        if !list_modified_variables.is_empty() {
             output.push_str(
                 format!(
                     "| {} | {} |\n",
@@ -142,7 +140,6 @@ impl Properties {
             );
         }
 
-
         if self.modify_record {
             output.push_str(format!("| {} ||\n", translation.changes_current_record).as_str());
         }
@@ -151,7 +148,7 @@ impl Properties {
             output.push_str(format!("| {} ||\n", translation.changes_current_selection).as_str());
         }
 
-        if !self.remote {
+        if self.not_for_server {
             output.push_str(format!("| {} ||\n", translation.forbidden_on_server).as_str());
         }
         output
@@ -165,16 +162,69 @@ fn is_command(in_content: &str) -> bool {
     && !in_content.contains("ak_610.png")
 }
 
+/* Renamed commands
+Get action info 	Action info
+GET ACTIVITY SNAPSHOT 	ACTIVITY SNAPSHOT
+Get application info 	Application info
+GET BACKUP INFORMATION 	BACKUP INFO
+Get call chain 	Call chain
+Get database measures 	Database measures
+Get last field number 	Last field number
+Get last query path 	Last query path
+Get last query plan 	Last query plan
+Get last table number 	Last table number
+Get license info 	License info
+Get license usage 	License usage
+Get localized document path 	Localized document path
+Get localized string 	Localized string
+Get locked records info 	Locked records info
+GET MEMORY STATISTICS 	MEMORY STATISTICS
+Get Monitored Activity 	Monitored activity
+GET MOUSE 	MOUSE POSITION
+GET RESTORE INFORMATION 	RESTORE INFO
+Get system info 	System info
+Get table fragmentation 	Table fragmentation
+Session storage by id 	Session storage
+
+*/
+
 fn create_properties() -> Result<HashMap<String, Option<Properties>>, anyhow::Error> {
     let mut list_properties = HashMap::new();
 
+    let renamed_command = HashMap::from([
+        ("get-action-info", "action-info"),
+        ("get-activity-snapshot", "activity-snapshot"),
+        ("get-application-info", "application-info"),
+        ("get-backup-information", "backup-info"),
+        ("get-call-chain", "call-chain"),
+        ("get-database-measures", "database-measures"),
+        ("get-last-field-number", "last-field-number"),
+        ("get-last-query-path", "last-query-path"),
+        ("get-last-query-plan", "last-query-plan"),
+        ("get-last-table-number", "last-table-number"),
+        ("get-license-info", "license-info"),
+        ("get-license-usage", "license-usage"),
+        ("get-localized-document-path", "localized-document-path"),
+        ("get-localized-string", "localized-string"),
+        ("get-locked-records-info", "locked-records-info"),
+        ("get-memory-statistics", "memory-statistics"),
+        ("get-monitored-activity", "monitored-activity"),
+        ("get-mouse", "mouse-position"),
+        ("get-restore-information", "restore-info"),
+        ("get-system-info", "system-info"),
+        ("get-table-fragmentation", "table-fragmentation"),
+        ("session-storage-by-id", "session-storage"),
+    ]);
     for entry in glob::glob("../4Dv20R6/4D/20-R6/*.301-*")? {
         let entry = entry?;
         let content = std::fs::read_to_string(entry.as_path())?;
         if is_command(&content) {
             if let Some(file_name) = entry.as_path().file_stem() {
                 let str = file_name.to_str().unwrap_or("");
-                let command_name = str.split(".").next().unwrap_or("").to_lowercase();
+                let mut command_name = str.split(".").next().unwrap_or("").to_lowercase();
+                command_name = renamed_command
+                    .get(command_name.as_str())
+                    .map_or(command_name, |v| v.to_string());
 
                 if str.ends_with("en") && !str.starts_with("o-") {
                     list_properties.insert(command_name, Properties::from(&content));
@@ -214,7 +264,7 @@ fn build_property_to_display(
         let translation = list_translations.get(language)?;
         let properties_str = properties.to_string(translation);
         output.push_str("\n\n");
-        output.push_str(format!("{}\n", translation.properties).as_str());
+        output.push_str(format!("#### {}\n\n", translation.properties).as_str());
         output.push_str(properties_str.as_str());
         output.push_str("\n\n");
     }
@@ -229,7 +279,6 @@ fn add_prperties(
 ) -> Result<(), anyhow::Error> {
     for directory in list {
         let mut language = "en".to_string();
-
 
         for entry in glob::glob(directory)? {
             let entry = entry?;
@@ -254,6 +303,7 @@ fn add_prperties(
                 list_translations,
                 list_properties,
             ) {
+                //println!("{} {}", path_str, &language);
                 let mut content = fs::read_to_string(path)?;
                 content.push_str(to_display.as_str());
                 fs::write(&path, content)?;
@@ -266,19 +316,22 @@ fn add_prperties(
 
 fn main() -> Result<(), anyhow::Error> {
     let list_to_apply = vec![
-        "../../docs/docs/**/*.md",
+        "../../docs/docs/commands/**/*.md",
+        "../../docs/docs/commands-legacy/**/*.md",
         "../../docs/i18n/*/docusaurus-plugin-content-docs/*/commands-legacy/**/*.md",
-        "../../docs/versioned_docs/*/commands-legacy/**/*.md",
+        "../../docs/versioned_docs/version-20-R7/commands-legacy/**/*.md",
+        "../../docs/versioned_docs/version-20-R7/commands/**/*.md",
     ];
     let translation_map = {
         let content = fs::read_to_string("translations.json")?;
         serde_json::from_str::<HashMap<String, Translation>>(&content)?
     };
+    let list_properties = create_properties()?;
+    let output = serde_json::to_string_pretty(&list_properties)?;
+    fs::write("properties.json", output)?;
     let list_properties: HashMap<String, Option<Properties>> =
         serde_json::from_str(std::fs::read_to_string("properties.json")?.as_str())?;
-    //let output = serde_json::to_string_pretty(&list_properties)?;
-    //let output = serde_json::to_string(&list_properties)?;
-    //fs::write("properties.json", output)?;
+
     remove_old_message(&list_to_apply)?;
     add_prperties(&list_to_apply, &list_properties, &translation_map)?;
     Ok(())
