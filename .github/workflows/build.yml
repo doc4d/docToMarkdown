@@ -22,20 +22,25 @@ jobs:
           run: |
             npm i -g @vercel/ncc
             npm install
-            node --experimental-sea-config exe.json
 
         - name: Build project
-          run: ncc build src/index.ts -o dist
+          run: |
+            npm run build
+            node --experimental-sea-config exe.json
+            ncc build src/index.ts -o dist
+
         - name: Build exe windows
           if: matrix.os == 'windows-latest'
           run: |
             node -e "require('fs').copyFileSync(process.execPath, 'html_to_md.exe')"
             npx postject html_to_md.exe NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
         - name: Build exe linux
           if: matrix.os == 'ubuntu-latest'
           run: |
             cp $(command -v node) html_to_md
             npx postject html_to_md NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+            
         - name: Upload artifact
           uses: actions/upload-artifact@v4
           with:
