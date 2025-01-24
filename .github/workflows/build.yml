@@ -40,8 +40,9 @@ jobs:
           run: |
             cp $(command -v node) html_to_md
             npx postject html_to_md NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
-            
+
         - name: Upload artifact
           uses: actions/upload-artifact@v4
           with:
-              path: html_to_md*
+            name: html_to_md-${{ matrix.os }}
+            path: html_to_md*
