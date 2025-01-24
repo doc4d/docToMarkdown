@@ -4,6 +4,7 @@
   "description": "",
   "main": "src/index.js",
   "scripts": {
+    "build": "npx tsc",
     "preexport": "npx tsc",
     "export": "node dist/index.js",
     "dev": "nodemon src/index.ts"
