@@ -25,8 +25,8 @@ jobs:
 
         - name: Build project
           run: |
-            node --experimental-sea-config exe.json
             ncc build src/index.ts -o dist
+            node --experimental-sea-config exe.json
 
         - name: Build exe windows
           if: matrix.os == 'windows-latest'
